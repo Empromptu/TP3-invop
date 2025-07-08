@@ -2,6 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+
+##########################
+####### WEISZFELD ########
+##########################
+
 # 10 puntos en R3
 puntos = np.array([
     [ 1.2,  3.4,  5.6],
@@ -30,7 +35,7 @@ def W_grad(x, puntos, pesos):
             grad += pesos[i] * (x - puntos[i]) / dist[i]
     return grad
 
-def weiszfeld(puntos, pesos, alpha=1e-6, max_iter=1000):
+def weiszfeld(puntos, pesos, alpha=1, max_iter=1000):
     m, d = puntos.shape
 
     # Paso previo: algun punto a_k es optimo?
@@ -90,6 +95,10 @@ plt.tight_layout()
 plt.show()
 
 
+##########################
+##### Hooke y Jeeves #####
+##########################
+
 # funcion para correr dentro de Hooke y Jeeves
 def explorar(f, base, delta):
     # ej depunto en R3: [1,2,3] 
@@ -132,8 +141,89 @@ def hookejeeves(f,puntos, delta=0.5, alpha=2.0, epsilon=1e-5, max_iter=1000):
         
         else:
             delta = delta/2  # reduzco el tamanio del salto
-            xe = explorar(x0,delta) # busco en un punto mas cercano al x0
+            xe = explorar(f,x0,delta) # busco en un punto mas cercano al x0
 
         i += 1
 
     return x0, f(x0)
+
+
+###########################
+## Gradiente descendente ##
+###########################
+
+def gradiente_descendente_armijo(f, grad_f, x0, alpha_init=1.0, beta=0.5, sigma=1e-4, max_iter=1000, tol=1e-6):
+    x = x0.copy()
+
+    for k in range(max_iter):
+        grad = grad_f(x)
+        grad_norm = np.linalg.norm(grad)
+
+        if grad_norm < tol:
+            break  # condición de parada
+
+        # Dirección de descenso (negativo del gradiente)
+        d = -grad
+
+        # Búsqueda lineal con criterio de Armijo
+        alpha = alpha_init
+        while f(x + alpha * d) > f(x) + sigma * alpha * np.dot(grad, d):
+            alpha *= beta  # reduzco el paso
+
+        x = x + alpha * d
+
+    return x, f(x)
+
+
+####################
+
+import time
+
+def generar_datos(distribucion='uniforme', n=30, d=2, semilla=None):
+    if semilla is not None:
+        np.random.seed(semilla)
+
+    if distribucion == 'uniforme':
+        puntos = np.random.uniform(0, 10, size=(n, d))
+    elif distribucion == 'normal':
+        puntos = np.random.normal(loc=5, scale=2, size=(n, d))
+    elif distribucion == 'cluster':
+        centros = np.array([[0, 0], [10, 10]])
+        puntos = np.vstack([
+            np.random.normal(centros[0], 1.0, size=(n//2, d)),
+            np.random.normal(centros[1], 1.0, size=(n - n//2, d))
+        ])
+    else:
+        raise ValueError("Distribución no reconocida")
+
+    pesos = np.random.randint(1, 100, size=n)
+    return puntos, pesos
+
+def comparar_algoritmos(distribucion, n=310, d=2):
+    puntos, pesos = generar_datos(distribucion=distribucion, n=n, d=d, semilla=42)
+
+    print(f"\n=== Distribución: {distribucion} ===")
+
+    # --- Weiszfeld ---
+    t0 = time.time()
+    xw, it_w = weiszfeld(puntos, pesos)
+    tw = time.time() - t0
+    print(f"Weiszfeld: {it_w} iteraciones, {tw:.4f} segundos")
+
+    # --- Hooke-Jeeves ---
+    t0 = time.time()
+    xhj, f_hj = hookejeeves(lambda x: W(x, puntos, pesos), puntos)
+    thj = time.time() - t0
+    print(f"Hooke-Jeeves: {thj:.4f} segundos")
+
+    # --- Gradiente Descendente ---
+    def grad_f(x): return W_grad(x, puntos, pesos)
+    t0 = time.time()
+    xg, fg = gradiente_descendente_armijo(lambda x: W(x, puntos, pesos), grad_f, puntos[0])
+    tg = time.time() - t0
+    print(f"Gradiente Descendente: {tg:.4f} segundos")
+
+
+comparar_algoritmos('uniforme')
+comparar_algoritmos('normal')
+comparar_algoritmos('cluster')
